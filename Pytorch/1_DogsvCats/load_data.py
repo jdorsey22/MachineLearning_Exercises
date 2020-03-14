@@ -36,7 +36,7 @@ class CatsAndDogsDataset(Dataset):
                 for f in tqdm(os.listdir(label)):
                     try:
                         path = os.path.join(label, f)
-                        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+                        img = cv2.imread(path, cv2.IMREAD_COLOR)
                         img = cv2.resize(img, (self.IMG_SIZE, self.IMG_SIZE))
                         self.data.append([torch.from_numpy(np.array(img)), np.eye(2)[self.LABELS[label]]])
 
@@ -76,7 +76,7 @@ def random_split(total_data_set, validation_percentage):
 
 if __name__ == '__main__':
     # creating the dataset object
-    dataset = CatsAndDogsDataset(REBUILD_DATA=False)
+    dataset = CatsAndDogsDataset(REBUILD_DATA=True)
     # Randomly split dataset into trainset and the validation set
     train_data, val_data = random_split(dataset, validation_percentage=10)
 
@@ -84,11 +84,13 @@ data_set = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=2)
 
 EPOCH = 5
 
-for epoch in range(EPOCH):
-    print("EPOCH", epoch)
-    for i, (imgs, labels) in enumerate(dataset):
-        print("Iteration:", i, "Image", imgs, "Label:", labels)
+print("Shape of Data", dataset[0][0].size())
 
-        if i >= 4:
-            break
+# for epoch in range(EPOCH):
+#     print("EPOCH", epoch)
+#     for i, (imgs, labels) in enumerate(dataset):
+#         print("Iteration:", i, "Image", imgs, "Label:", labels)
+#
+#         if i >= 4:
+#             break
 
