@@ -4,46 +4,84 @@ import numpy as np
 import torch
 import torchvision
 import torch.optim as optim
-from torchvision import transforms, datasets
+from torchvision import transforms, datasets, utils
 import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from torch.utils.data import Dataset, DataLoader
 
-REBUILD_DATA = False
+# If available use GPU memory to load data
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda:0" if use_cuda else "cpu")
+# print("ON DEVICE", device)
 
-class DogsVCats():
-    IMG_SIZE = 50
 
-    PATH = 'C:\\Users\\Indiana\\Desktop\\CatsVDogs\\PetImages'
+class CatsAndDogsDataset(Dataset):
+    """ Dogs & Cats data Set """
+    def __init__(self, REBUILD_DATA=False, IMG_SIZE=50, transform=None, PATH= "C:\\Users\\jonat\\Desktop\\Machine Learning\\DataSet\\train"):
+        """ This function, inputs REBUILD Flag. and """
+        self.IMG_SIZE = IMG_SIZE
+        self.transform = transform
 
-    CAT = PATH + '\\Cat'
-    DOG = PATH + '\\Dog'
-    LABELS = {CAT: 0, DOG: 1}
-    training_data = []
-    cat_count = 0
-    dog_count = 0
+        self.PATH = PATH
 
-    def make_training_data(self):
-         for label in self.LABELS:
-             for f in tqdm(os.listdir(label)):
-                 try:
-                     path = os.path.join(label, f)
-                     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-                     img = cv2.resize(img, (self.IMG_SIZE, self.IMG_SIZE))
-                     self.training_data.append([np.array(img), np.eye(2)[self.LABELS[label]]])
+        self.CAT = self.PATH + '\\Cats'
+        self.DOG = self.PATH + '\\Dogs'
+        self.LABELS = {self.CAT: 0, self.DOG: 1}
+        self.REBUILD_DATA = REBUILD_DATA
 
-                     if label == self.CAT:
-                         self.cat_count += 1
-                     elif label == self.DOG:
-                         self.dog_count += 1
-                 except Exception as e:
-                    pass
+        self.data = []
+        self.save_data = []
 
-         np.random.shuffle(self.training_data)
-         np.save("'C:\\Users\\Indiana\\Desktop\\CatsVDogs\\training_data.npy", self.training_data)
-         print("Cats:", self.cat_count)
-         print("Dogs:", self.dog_count)
+
+        if self.REBUILD_DATA:
+
+            for label in self.LABELS:
+                for f in tqdm(os.listdir(label)):
+                    try:
+                        path = os.path.join(label, f)
+                        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+                        img = cv2.resize(img, (self.IMG_SIZE, self.IMG_SIZE))
+                        self.data.append([torch.from_numpy(np.array(img)), np.eye(2)[self.LABELS[label]]])
+                        self.save_data.append([np.array(img), np.eye(2)[self.LABELS[label]]])
+
+
+                    except Exception as e:
+                        pass
+
+            np.random.shuffle(self.data)
+            np.random.shuffle(self.save_data)
+
+            np.save("Data\\data.npy", self.data)
+            np.save("Data\\save_data.npy", self.save_data)
+
+        else:
+            self.save_data = np.load("Data\\save_data.npy", allow_pickle=True)
+            self.data = [[torch.from_numpy(self.save_data[j][0]), self.save_data[j][1]] for j in range(len(self.save_data))]
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, item):
+
+        return self.data[item]
+
+
+def random_split(total_data_set, validation_percentage):
+    data_set_len = len(total_data_set)
+    val_set_pct = float(validation_percentage/100.0)
+    val_set_len = int(data_set_len * val_set_pct)
+    train_set_len = (data_set_len - val_set_len)
+
+    # training_data = total_data_set[0:train_set_len]
+    # valid_data = total_data_set[(train_set_len+1):]
+
+    training_data = [total_data_set[i] for i in range(train_set_len)]
+    valid_data = [total_data_set[i] for i in range(train_set_len, data_set_len)]
+
+    return training_data, valid_data
+
 
 
 class Net(nn.Module):
@@ -91,7 +129,6 @@ class Net(nn.Module):
         x = F.relu(self.fc3(x))
         x = self.fc4_BN(self.fc4(x))
 
-        # return F.softmax(x, dim=1)
         return F.softmax(x, dim=1)
 
 
@@ -103,96 +140,68 @@ if __name__ == '__main__':
         print("TORCH: Running on GPU")
     else:
         device = torch.device("cpu")
-        print("TORCH: Running on CPI")
+        print("TORCH: Running on CPU")
 
-    if REBUILD_DATA:
-        dogsVcats = DogsVCats()
-        dogsVcats.make_training_data()
+    # creating the dataset object
+    dataset = CatsAndDogsDataset(REBUILD_DATA=False)
 
-    # training_data = np.load("C:\\Users\\Indiana\\Desktop\\CatsVDogs\\training_data.npy", allow_pickle=True)
-    training_data = np.load("C:\\Users\\Indiana\\Desktop\\Machine Learning\\DataSet\\train\\training__TENSOR_data.npy", allow_pickle=True)
-    print(len(training_data))
-    print(np.shape(training_data))
-    print(training_data[1])
-    plt.imshow(training_data[1][0])
-    print(training_data[1][1])
-    # plt.show()
+    # Randomly split dataset into trainset and the validation set
+    train_data, val_data = random_split(dataset, validation_percentage=10)
+
+    # Data Setup
+    train_data = DataLoader(train_data, batch_size=200, shuffle=True, num_workers=2)
+    val_data = DataLoader(val_data, batch_size=200, shuffle=True, num_workers=2)
 
 
+
+    # Model Setup
     net = Net()
 
-
-    X = torch.Tensor([i[0] for i in training_data]).view(-1, 50, 50)
-    X = X/255.0
-
-    Y = torch.Tensor([training_data[i][1] for i in range(len(training_data))])
-
-    # Y_data_ind = [np.argmax(Y_data[i]) for i in range(len(Y_data))]
-    #
-    # Y = (Y_data_ind)
-
-    print("TARGET IND", Y)
-
-    VAL_PCT = .1
-    val_size = int(len(X)*VAL_PCT)
-    print(val_size)
-
-    train_X = X[:-val_size]
-    train_Y = Y[:-val_size]
-
-    test_X = X[-val_size:]
-    test_Y = Y[-val_size:]
-
-    BATCH_SIZE = 200
-
-    EPOCHS = 25
-
-
+    EPOCHS = 2
 
     net.to(device)
-
-    # optimizer = optim.Adam(net.parameters(), lr=0.001)
     optimizer = optim.Adam(net.parameters(), lr=0.001)
-
-    # loss_function = nn.MSELoss()
     loss_function = nn.MSELoss()
     loss_function.to(device)
-
-
-
-
+# """
+#     for i, (imgs, labels) in enumerate(train_data):
+#
+#         print(imgs.size())
+#         print(imgs)
+#
+#         print("____________________________________________________________________________________________________")
+#         print(imgs.view(-1, 1, 50, 50))
+#         print(imgs.view(-1, 1, 50, 50).size())
+#
+#         break
+#
+# """
     for epoch in range(EPOCHS):
-        for i in tqdm(range(0, len(train_X), BATCH_SIZE)):
+        print("EPOCH", epoch)
+        for (imgs, labels) in tqdm(train_data):
             net.train()
-            # print(i, i+BATCH_SIZE)
-            batch_x = train_X[i:i+BATCH_SIZE].view(-1, 1, 50, 50)
-            batch_y = train_Y[i:i+BATCH_SIZE]
-
-            batch_x, batch_y = batch_x.to(device), batch_y.to(device)
-
             net.zero_grad()
-            output = net(batch_x)
-            loss = loss_function(output, batch_y)
+            output = net(imgs.float().view(-1, 1, 50, 50))
+            loss = loss_function(output, labels.float())
             loss.backward()
             optimizer.step()
         print("Epoch= ", epoch, "Loss= ", loss)
-    # print(loss)
+
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for j, (imgs, labels) in tqdm(enumerate(val_data)):
+                net.eval()
+                output = net(imgs.view(-1, 1, 50, 50))
+                real_class = torch.argmax(labels.to(device))
+                net_out = net(imgs.view(-1, 1, 50, 50).to(device))[0]
+                predicted_class = torch.argmax(net_out)
+                if predicted_class == real_class:
+                    correct += 1
+                total += 1
+        print("Validation Accuracy:", round(correct/total, 3) )
 
 
-correct = 0
-total = 0
-with torch.no_grad():
-    for i in tqdm(range(len(test_X))):
-        net.eval()
-        real_class = torch.argmax(test_Y[i].to(device))
-        net_out = net(test_X[i].view(-1, 1, 50, 50).to(device))[0]
-        predicted_class = torch.argmax(net_out)
-        if predicted_class == real_class:
-            correct += 1
-        total += 1
-print("Accuracy:", round(correct/total, 3))
-
-
-NN_TRAINED_Model_path = "C:\\Users\\Indiana\\Desktop\\CatsVDogs\\Trained_model"
-NN_TRAINED_Model_path += "\\train_cat_dog_model.pt"
-torch.save(net.state_dict(), NN_TRAINED_Model_path)
+    NN_TRAINED_Model_path = "C:\\Users\\jonat\\Documents\\MachineLearning_Exercises\\Pytorch\\1_DogsvCats\\NN_Model"
+    NN_TRAINED_Model_path += "\\Dogs_V_Cats_NN_model.pt"
+    torch.save(net.state_dict(), NN_TRAINED_Model_path)
