@@ -157,7 +157,7 @@ if __name__ == '__main__':
     # Model Setup
     net = Net()
 
-    EPOCHS = 2
+    EPOCHS = 10
 
     net.to(device)
     optimizer = optim.Adam(net.parameters(), lr=0.001)
@@ -181,8 +181,8 @@ if __name__ == '__main__':
         for (imgs, labels) in tqdm(train_data):
             net.train()
             net.zero_grad()
-            output = net(imgs.float().view(-1, 1, 50, 50))
-            loss = loss_function(output, labels.float())
+            output = net(imgs.float().view(-1, 1, 50, 50).to(device))
+            loss = loss_function(output, labels.float().to(device))
             loss.backward()
             optimizer.step()
         print("Epoch= ", epoch, "Loss= ", loss)
@@ -190,11 +190,11 @@ if __name__ == '__main__':
         with torch.no_grad():
             correct = 0
             total = 0
-            for j, (imgs, labels) in tqdm(enumerate(val_data)):
+            for (imgs, labels) in tqdm(val_data):
                 net.eval()
-                output = net(imgs.view(-1, 1, 50, 50))
+                # output = net(imgs.view(-1, 1, 50, 50).to(device))
                 real_class = torch.argmax(labels.to(device))
-                net_out = net(imgs.view(-1, 1, 50, 50).to(device))[0]
+                net_out = net(imgs.float().view(-1, 1, 50, 50).to(device))[0]
                 predicted_class = torch.argmax(net_out)
                 if predicted_class == real_class:
                     correct += 1
@@ -202,6 +202,6 @@ if __name__ == '__main__':
         print("Validation Accuracy:", round(correct/total, 3) )
 
 
-    NN_TRAINED_Model_path = "C:\\Users\\jonat\\Documents\\MachineLearning_Exercises\\Pytorch\\1_DogsvCats\\NN_Model"
+    NN_TRAINED_Model_path = "C:\\Users\\Indiana\\Documents\\MachineLearning_Exercises\\Pytorch\\1_DogsvCats\\NN_Model"
     NN_TRAINED_Model_path += "\\Dogs_V_Cats_NN_model.pt"
     torch.save(net.state_dict(), NN_TRAINED_Model_path)
