@@ -17,9 +17,14 @@ from torch.utils.data import Dataset, DataLoader
 # print("ON DEVICE", device)
 
 
+
+#"C:\\Users\\jonat\\Desktop\\Machine Learning\\DataSet\\train"
+
+
 class CatsAndDogsDataset(Dataset):
     """ Dogs & Cats data Set """
-    def __init__(self, REBUILD_DATA=False, IMG_SIZE=50, transform=None, PATH= "C:\\Users\\jonat\\Desktop\\Machine Learning\\DataSet\\train"):
+    def __init__(self, REBUILD_DATA=False, IMG_SIZE=100, transform=None, PATH="C:\\Users\\Indiana\\Desktop\\Machine Learning\\DataSet\\train_extended" ):
+
         """ This function, inputs REBUILD Flag. and """
         self.IMG_SIZE = IMG_SIZE
         self.transform = transform
@@ -98,21 +103,31 @@ class Net(nn.Module):
 
         self._to_linear = None
 
-        x = torch.rand(50, 50).view(-1, 1, 50, 50)
+        x = torch.rand(100, 100).view(-1, 1, 100, 100)
         self.convs(x)
 
-        self.fc1 = nn.Linear(self._to_linear, 250)
-        self.fc2 = nn.Linear(250, 125)
-        self.fc3 = nn.Linear(125, 50)
-        self.fc4_BN = nn.BatchNorm1d(2)
-        self.fc4 = nn.Linear(50, 2)
+        # self.fc1 = nn.Linear(self._to_linear, 250)
+        # self.fc2 = nn.Linear(250, 400)
+        # self.fc3 = nn.Linear(400, 200)
+        # self.fc4_BN = nn.BatchNorm1d(50)
+        # self.fc4 = nn.Linear(200, 50)
+        # self.fc5 = nn.Linear(50, 2)
+
+        # self.fc1 = nn.Linear(self._to_linear, 400)
+        # self.fc2 = nn.Linear(400, 100)
+        # self.fc3 = nn.Linear(100, 2)
+
+        self.fc1 = nn.Linear(self._to_linear, 400)
+        self.fc2 = nn.Linear(400, 2)
+
+
 
 
 
     def convs(self, x):
         x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
-        x = F.max_pool2d(F.relu(self.conv2_BN(self.conv2(x))), (2, 2))
-        x = F.max_pool2d(F.relu(self.conv3(x)), (2, 2))
+        x = F.max_pool2d(F.relu(self.conv2_BN(self.conv2(x))), (4, 4))
+        x = F.max_pool2d(F.relu(self.conv3(x)), (3, 3))
 
         if self._to_linear is None:
             self._to_linear = x[0].shape[0]*x[0].shape[1]*x[0].shape[2]
@@ -124,10 +139,19 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.convs(x)
         x = x.view(-1, self._to_linear)
+        # x = self.d1(F.relu(self.fc1(x)))
+        # x = self.d2(F.relu(self.fc2(x)))
+        # x = F.relu(self.fc3(x))
+        # x = self.fc4_BN(self.fc4(x))
+        # x = self.fc5(x)
+
+        # x = self.d1(F.relu(self.fc1(x)))
+        # x = self.d2(F.relu(self.fc2(x)))
+        # x = self.fc3(x)
+
         x = self.d1(F.relu(self.fc1(x)))
-        x = self.d2(F.relu(self.fc2(x)))
-        x = F.relu(self.fc3(x))
-        x = self.fc4_BN(self.fc4(x))
+        x = self.fc2(x)
+
 
         return F.softmax(x, dim=1)
 
@@ -146,43 +170,36 @@ if __name__ == '__main__':
     dataset = CatsAndDogsDataset(REBUILD_DATA=False)
 
     # Randomly split dataset into trainset and the validation set
-    train_data, val_data = random_split(dataset, validation_percentage=10)
+    train_data, val_data = random_split(dataset, validation_percentage=20)
 
     # Data Setup
-    train_data = DataLoader(train_data, batch_size=200, shuffle=True, num_workers=2)
-    val_data = DataLoader(val_data, batch_size=200, shuffle=True, num_workers=2)
+    train_data = DataLoader(train_data, batch_size=200, shuffle=True, num_workers=3)
+    val_data = DataLoader(val_data, batch_size=1, shuffle=True, num_workers=3)
 
 
 
     # Model Setup
     net = Net()
 
-    EPOCHS = 10
+    EPOCHS = 20
 
     net.to(device)
     optimizer = optim.Adam(net.parameters(), lr=0.001)
-    loss_function = nn.MSELoss()
+    # loss_function = nn.MSELoss()
+    loss_function = nn.CrossEntropyLoss()
     loss_function.to(device)
-# """
-#     for i, (imgs, labels) in enumerate(train_data):
-#
-#         print(imgs.size())
-#         print(imgs)
-#
-#         print("____________________________________________________________________________________________________")
-#         print(imgs.view(-1, 1, 50, 50))
-#         print(imgs.view(-1, 1, 50, 50).size())
-#
-#         break
-#
-# """
+
     for epoch in range(EPOCHS):
         print("EPOCH", epoch)
         for (imgs, labels) in tqdm(train_data):
             net.train()
             net.zero_grad()
-            output = net(imgs.float().view(-1, 1, 50, 50).to(device))
-            loss = loss_function(output, labels.float().to(device))
+            output = net(imgs.float().view(-1, 1, 100, 100).to(device))
+            # loss = loss_function(output, labels.float().to(device))
+            loss = loss_function(output, torch.argmax(labels, dim=1).to(device))
+
+
+
             loss.backward()
             optimizer.step()
         print("Epoch= ", epoch, "Loss= ", loss)
@@ -192,14 +209,16 @@ if __name__ == '__main__':
             total = 0
             for (imgs, labels) in tqdm(val_data):
                 net.eval()
-                # output = net(imgs.view(-1, 1, 50, 50).to(device))
                 real_class = torch.argmax(labels.to(device))
-                net_out = net(imgs.float().view(-1, 1, 50, 50).to(device))[0]
+                net_out = net(imgs.float().view(-1, 1, 100, 100).to(device))[0]
                 predicted_class = torch.argmax(net_out)
                 if predicted_class == real_class:
                     correct += 1
                 total += 1
-        print("Validation Accuracy:", round(correct/total, 3) )
+        print("Validation Accuracy:", round(correct/total, 3))
+
+        # train_data = DataLoader(train_data, batch_size=200, shuffle=True, num_workers=3)
+        # val_data = DataLoader(val_data, batch_size=200, shuffle=True, num_workers=3)
 
 
     NN_TRAINED_Model_path = "C:\\Users\\Indiana\\Documents\\MachineLearning_Exercises\\Pytorch\\1_DogsvCats\\NN_Model"
